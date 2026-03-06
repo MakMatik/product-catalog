@@ -1,0 +1,31 @@
+# .NET build output
+bin/
+obj/
+
+# User-specific files
+*.user
+*.suo
+*.userossp
+
+# Visual Studio
+.vs/
+
+# Rider / JetBrains
+.idea/
+
+# NuGet
+*.nupkg
+packages/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment overrides
+appsettings.*.local.json
+
+# Angular / Node (for your frontend)
+node_modules/
+dist/
+.angular/
+coverage/
