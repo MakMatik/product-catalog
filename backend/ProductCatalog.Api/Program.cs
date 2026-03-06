@@ -1,41 +1,72 @@
+using Microsoft.EntityFrameworkCore;
+using ProductCatalog.Api.Data;
+using ProductCatalog.Api.Middleware;
+using ProductCatalog.Api.Repositories;
+using ProductCatalog.Api.Services;
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
+// ─── Services ────────────────────────────────────────────────────────────
+
+builder.Services.AddDbContext<ProductCatalogDbContext>(options =>
+    options.UseInMemoryDatabase("ProductCatalogDb"));
+
+// DI: Repositories
+builder.Services.AddScoped<IProductRepository, ProductRepository>();
+builder.Services.AddSingleton<ICategoryRepository, InMemoryCategoryRepository>();
+
+// DI: ProductSearchEngine — Singleton to maintain index across requests
+builder.Services.AddSingleton<ProductSearchEngine>();
+
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
+    });
+
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new() { Title = "Product Catalog API", Version = "v1" });
+});
+
+// CORS for Angular frontend
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAngular", policy =>
+    {
+        policy.WithOrigins("http://localhost:4200")
+              .AllowAnyHeader()
+              .AllowAnyMethod();
+    });
+});
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
+// ─── Middleware Pipeline ─────────────────────────────────────────────────
+
+app.UseExceptionHandling();   // Custom — outermost to catch all errors
+app.UseRequestLogging();      // Custom — logs every request
+
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
+    app.UseSwagger();
+    app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
+app.UseCors("AllowAngular");
+app.MapControllers();
 
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
+// ─── Seed DB & Initialize Search Index ───────────────────────────────────
 
-app.MapGet("/weatherforecast", () =>
+using (var scope = app.Services.CreateScope())
 {
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast");
+    var context = scope.ServiceProvider.GetRequiredService<ProductCatalogDbContext>();
+    context.Database.EnsureCreated();
+
+    var searchEngine = app.Services.GetRequiredService<ProductSearchEngine>();
+    var products = await context.Products.Include(p => p.Category).ToListAsync();
+    searchEngine.UpdateIndex(products);
+}
 
 app.Run();
-
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}
