@@ -31,8 +31,11 @@ App available at **http://localhost:4200**.
 ### Running Tests
 ```bash
 cd frontend
-ng test --watch=false --browsers=ChromeHeadless
+ng test --watch=false
 ```
+
+## Video Demo
+[Watch the walkthrough](https://youtu.be/QzvbeMipAN4)
 
 ## API Endpoints
 
